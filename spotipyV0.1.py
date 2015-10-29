@@ -35,7 +35,7 @@ class spotifyRPI(object):
         self.vloop = spotify.EventLoop(self.vsession)
         self.vloop.start()
 
-        self.vsession.login('mistergonzo90', 'hundekuchen04')
+        self.vsession.login('mistergonzo', 'hundekuchen')
 
         while not self.logged_in_event.wait(0.1):
             self.vsession.process_events()
