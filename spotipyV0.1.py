@@ -11,41 +11,60 @@ import time
 
 class spotifyRPI(object):
 
+    # initialises when spotifyRPI class is called,
+    # e.g:
+    # > rpyb = spotifyRPI()
+    # upon calling rpyb:
+    # print..., os.system(...), rpyb.logged_in_event, rpyb.titelliste,etc are called or defined
     def __init__(self):
         print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n.....init...............")
         #os.system("sh /home/pi/sleepKill.sh &")
         os.system("sh /home/pi/showPic.sh /home/pi/heartBW_klein.jpg")
         self.logged_in_event = threading.Event()
-        self.vtitelliste = []
-        self.vtitelcounter = 0
-        self.vconfig = spotify.Config()
-        self.vconfig.user_agent = "raspberry pi"
-        self.vconfig.device_id = "123456789"
+        self.titelliste = []
+        self.titelcounter = 0
+        self.config = spotify.Config()
+        self.config.user_agent = "raspberry pi"
+        self.config.device_id = "123456789"
 
-        self.vsession = spotify.Session(config=self.vconfig)
+        # Important; is used a lot to hand the session to spotify as a prefix
+        # and is therefore abbreviated to .session
+        self.session = spotify.Session(config=self.config)
 
-        self.vsession.on(
+        self.session.on(
             spotify.SessionEvent.END_OF_TRACK, self.end_track_listener)
 
-        self.vsession.on(
+        self.session.on(
             spotify.SessionEvent.CONNECTION_STATE_UPDATED,
             self.connection_state_listener)
 
-        self.vaudio = spotify.AlsaSink(self.vsession)
-        self.vloop = spotify.EventLoop(self.vsession)
-        self.vloop.start()
+        # Audio sink for delivery of the PCM audio frames to your OS
+        self.audio = spotify.AlsaSink(self.session)
 
-        self.vsession.login('mistergonzo', 'hundekuchen')
+        # @gorela:
+        # "Note that when using EventLoop, your event listener functions
+        # are called from the EventLoop thread, and not from your main thread.
+        # You may need to add synchronization primitives to protect your
+        # application code from threading issues."
+        # aus: https://pyspotify.mopidy.com/en/latest/quickstart/
+        # ganz unten im quickstart guide steht noch ausführlicher was dazu
+        self.loop = spotify.EventLoop(self.session)
+        self.loop.start()
 
-        while not self.logged_in_event.wait(0.1):
-            self.vsession.process_events()
+        self.session.login('mistergonzo', 'hundekuchen')
 
+        # @gorela wurde das nicht schon durch das loop oben erreicht?:
+
+        # >while not self.logged_in_event.wait(0.1):
+        # >    self.session.process_events()
+
+        # State machine for different playback scenarios!
         self.INIT = 0x00
         self.NOSONGS = 0x01
         self.PLAY = 0x02
 
         self.state = self.INIT
-        if(int(self.vsession.connection.state) == 1):
+        if(int(self.session.connection.state) == 1):
             os.system("clear")
             print("...hat geklapp alter!!!")
             thread.start_new_thread(self.askTelegram, ())
@@ -55,10 +74,12 @@ class spotifyRPI(object):
         if session.connection.state is spotify.ConnectionState.LOGGED_IN:
             self.logged_in_event.set()
 
+    # @gorela: wieso übergibt man hier die session,
+    # obwohl 'session' nicht benutzt wird?
     def end_track_listener(self, session):
         if(self.state != self.NOSONGS):
-            print('am arsch')    
-            # self.vtitelcounter += 1
+            print('am arsch')
+            # self.titelcounter += 1
         self.playNextSong()
         self.state = self.NOSONGS
 
@@ -73,8 +94,8 @@ class spotifyRPI(object):
             fil.close()
             # print to playlist.txt for telegram
             fil = open("/home/pi/playlist.txt", 'w')
-            i = len(self.vtitelliste[self.vtitelcounter:])
-            for song in reversed(self.vtitelliste[self.vtitelcounter:]):
+            i = len(self.titelliste[self.titelcounter:])
+            for song in reversed(self.titelliste[self.titelcounter:]):
                 fil.write(str(i) + " " + song.name.encode("utf8") + "\n" + song.artists[0].name.encode("utf8") + "\n----------------\n")
                 i -= 1
         # fil.write("wird noch ")
@@ -85,44 +106,44 @@ class spotifyRPI(object):
 
     def longSearch(self):
         try:
-            vsucheingabe = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').encode("utf8")
-            if vsucheingabe:
-                vsuche = self.vsession.search(str(vsucheingabe))
-                vsuche.load()
-                self.printArray(vsuche.artists, "artists")
+            sucheingabe = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').encode("utf8")
+            if sucheingabe:
+                suche = self.session.search(str(sucheingabe))
+                suche.load()
+                self.printArray(suche.artists, "artists")
 
-                vartisteingabe = raw_input('welchen von denen, alter? ')
-                if vartisteingabe.isdigit():
-                    vartist = self.vsession.get_artist(
-                        vsuche.artists[int(vartisteingabe)].link.uri)
-                    print vartist.load().name
+                artisteingabe = raw_input('welchen von denen, alter? ')
+                if artisteingabe.isdigit():
+                    artistt = self.session.get_artist(
+                        suche.artists[int(artisteingabe)].link.uri)
+                    print artistt.load().name
 
-                    vartistbrowser = vartist.browse()
-                    vartistbrowser.load()
+                    artisttbrowser = artistt.browse()
+                    artisttbrowser.load()
 
-                    valbums = vartistbrowser.albums
+                    albums = artisttbrowser.albums
 
-                    self.printArray(valbums, "albums")
+                    self.printArray(albums, "albums")
 
-                    valbumeingabe = raw_input('welches album solls sein, maeuschen? ')
+                    albumeingabe = raw_input('welches album solls sein, maeuschen? ')
 
-                    if valbumeingabe.isdigit():
-                        valbum = self.vsession.get_album(
-                            valbums[int(valbumeingabe)].link.uri)
-                        valbumbrowser = valbum.browse()
-                        valbumbrowser.load()
-                        vtracks = valbumbrowser.tracks
+                    if albumeingabe.isdigit():
+                        album = self.session.get_album(
+                            albums[int(albumeingabe)].link.uri)
+                        albumbrowser = album.browse()
+                        albumbrowser.load()
+                        tracks = albumbrowser.tracks
 
-                        self.printArray(vtracks, "tracks")
+                        self.printArray(tracks, "tracks")
 
-                        vtiteleingabe = raw_input('track nummer? ')
-                        if vtiteleingabe.isdigit():
+                        titeleingabe = raw_input('track nummer? ')
+                        if titeleingabe.isdigit():
 
-                            self.vtitelcounter = int(vtiteleingabe)
-                            self.vtitelliste = [t for t in vtracks]
-                            print type(self.vtitelliste)
-                            self.vsession.player.load(vtracks[int(vtiteleingabe)])
-                            self.vsession.player.play()
+                            self.titelcounter = int(titeleingabe)
+                            self.titelliste = [t for t in tracks]
+                            print type(self.titelliste)
+                            self.session.player.load(tracks[int(titeleingabe)])
+                            self.session.player.play()
                             self.playSong()
             else:
                 print("kakkvogel")
@@ -134,22 +155,22 @@ class spotifyRPI(object):
             pass
 
     def playNextSong(self):
-        self.vtitelcounter += 1
+        self.titelcounter += 1
         self.playSong()
 
     def playSong(self):
-        if self.vtitelcounter < len(self.vtitelliste):
+        if self.titelcounter < len(self.titelliste):
             print('laeuft')
             self.state = self.PLAY
-            self.vsession.player.load(
-                self.vtitelliste[int(self.vtitelcounter)])
-            self.vsession.player.play()
+            self.session.player.load(
+                self.titelliste[int(self.titelcounter)])
+            self.session.player.play()
             print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
             print('______________________________')
             print('')
-            print(self.vtitelliste[int(self.vtitelcounter)].artists[0].name)
-            print(self.vtitelliste[int(self.vtitelcounter)].album.name)
-            print(self.vtitelliste[int(self.vtitelcounter)].name)
+            print(self.titelliste[int(self.titelcounter)].artists[0].name)
+            print(self.titelliste[int(self.titelcounter)].album.name)
+            print(self.titelliste[int(self.titelcounter)].name)
             print('______________________________')
             print('\n\n\n\n\n\n\n\n\n\n\n\n')
         else:
@@ -162,78 +183,78 @@ class spotifyRPI(object):
         os.system("fbi -noverbose -t 5 %s" % path)
 
     def eingabe(self):
-        vsucheingabe = str(raw_input('?')).encode("utf8")
-        if(vsucheingabe):
-            self.searchy(vsucheingabe)
+        sucheingabe = str(raw_input('?')).encode("utf8")
+        if(sucheingabe):
+            self.searchy(sucheingabe)
     # thread.start_new_thread(self.eingabe,())
 
-    def searchy(self, vsucheingabe):
-        if vsucheingabe in 's':
+    def searchy(self, sucheingabe):
+        if sucheingabe in 's':
             self.longSearch()
-        elif 's ' in vsucheingabe[:2]:
-            vsuche = self.vsession.search(str(vsucheingabe[2:]))
-            vsuche.load()
-            if vsuche.artists:
-                self.printArray(vsuche.artists, 'artists')
-            if vsuche.albums:
-                self.printArray(vsuche.albums, 'albums')
-            if vsuche.tracks:
-                self.printArray(vsuche.tracks, 'tracks')
-            if vsuche.did_you_mean:
-                self.printArray(vsuche.did_you_mean, 'did u mean')
-        elif vsucheingabe in 'n':
+        elif 's ' in sucheingabe[:2]:
+            suche = self.session.search(str(sucheingabe[2:]))
+            suche.load()
+            if suche.artists:
+                self.printArray(suche.artists, 'artists')
+            if suche.albums:
+                self.printArray(suche.albums, 'albums')
+            if suche.tracks:
+                self.printArray(suche.tracks, 'tracks')
+            if suche.did_you_mean:
+                self.printArray(suche.did_you_mean, 'did u mean')
+        elif sucheingabe in 'n':
             self.playNextSong()
-        elif vsucheingabe in 'ls':
-            self.printArray(self.vtitelliste[self.vtitelcounter:], "datt steht an")
-        elif vsucheingabe in "latin":
-            vsuche = self.vsession.search("roots of chicha")
-            vsuche.load()
-            self.vtitelliste = [t for t in vsuche.tracks]
-            self.vtitelcounter = int(randint(0, len(self.vtitelliste)-1))
+        elif sucheingabe in 'ls':
+            self.printArray(self.titelliste[self.titelcounter:], "datt steht an")
+        elif sucheingabe in "latin":
+            suche = self.session.search("roots of chicha")
+            suche.load()
+            self.titelliste = [t for t in suche.tracks]
+            self.titelcounter = int(randint(0, len(self.titelliste)-1))
             self.playSong()
-        elif vsucheingabe[-1] in '?':
-            vsuche = self.vsession.search(str(vsucheingabe[:-1]))
-            vsuche.load()
-            self.vtitelliste = [t for t in vsuche.tracks]
-            self.vtitelcounter = int(randint(0, len(self.vtitelliste)-1))
+        elif sucheingabe[-1] in '?':
+            suche = self.session.search(str(sucheingabe[:-1]))
+            suche.load()
+            self.titelliste = [t for t in suche.tracks]
+            self.titelcounter = int(randint(0, len(self.titelliste)-1))
             self.playSong()
-        elif vsucheingabe[-1] in '!':
-            vsuche = self.vsession.search(str(vsucheingabe[:-1]), track_count=1)
-            vsuche.load()
-            if(vsuche.tracks):
-                self.vtitelliste = [t for t in vsuche.tracks]
-                self.vtitelcounter = 0
-                valbumbrowser = vsuche.tracks[0].album.browse()
-                valbumbrowser.load()
-                vtracks = valbumbrowser.tracks
-                [self.vtitelliste.append(t) for t in vtracks]
+        elif sucheingabe[-1] in '!':
+            suche = self.session.search(str(sucheingabe[:-1]), track_count=1)
+            suche.load()
+            if(suche.tracks):
+                self.titelliste = [t for t in suche.tracks]
+                self.titelcounter = 0
+                albumbrowser = suche.tracks[0].album.browse()
+                albumbrowser.load()
+                tracks = albumbrowser.tracks
+                [self.titelliste.append(t) for t in tracks]
                 self.playSong()
-        elif vsucheingabe[-1] in '+':
-            vsuche = self.vsession.search(str(vsucheingabe[:-1]))
-            vsuche.load()
-            self.vtitelliste.insert(self.vtitelcounter+1, vsuche.tracks[0])
-        # self.vtitelcounter += 1
+        elif sucheingabe[-1] in '+':
+            suche = self.session.search(str(sucheingabe[:-1]))
+            suche.load()
+            self.titelliste.insert(self.titelcounter+1, suche.tracks[0])
+        # self.titelcounter += 1
         # self.playSong()
-        elif vsucheingabe[-1] in '@':
-            vsuche = self.vsession.search(str(vsucheingabe[:-1]))
-            vsuche.load()
-            [self.vtitelliste.append(t) for t in vsuche.tracks]
-        elif vsucheingabe in 'random':
-            tempCurrSong = self.vtitelliste[self.vtitelcounter]
-            self.vtitelliste = self.vtitelliste[self.vtitelcounter+1:]
-            shuffle(self.vtitelliste)
-            self.vtitelliste.insert(0, tempCurrSong)
-            self.vtitelcounter = 0
-        elif vsucheingabe in 'stop':
-            self.vsession.player.pause()
+        elif sucheingabe[-1] in '@':
+            suche = self.session.search(str(sucheingabe[:-1]))
+            suche.load()
+            [self.titelliste.append(t) for t in suche.tracks]
+        elif sucheingabe in 'random':
+            tempCurrSong = self.titelliste[self.titelcounter]
+            self.titelliste = self.titelliste[self.titelcounter+1:]
+            shuffle(self.titelliste)
+            self.titelliste.insert(0, tempCurrSong)
+            self.titelcounter = 0
+        elif sucheingabe in 'stop':
+            self.session.player.pause()
         # thread.start_new_thread(self.showPic,("/home/pi/franzl_knarre_klein.jpg",))
         # os.system("rm /home/pi/yay.txt")
         else:
-            vsuche = self.vsession.search(str(vsucheingabe))
-            vsuche.load()
-            if(vsuche.tracks):
-                self.vtitelliste.append(vsuche.tracks[0])
-                if(self.vsession.player.state.encode("utf8") in "unloaded" or self.vsession.player.state.encode("utf8") in "paused"):
+            suche = self.session.search(str(sucheingabe))
+            suche.load()
+            if(suche.tracks):
+                self.titelliste.append(suche.tracks[0])
+                if(self.session.player.state.encode("utf8") in "unloaded" or self.session.player.state.encode("utf8") in "paused"):
                     self.playSong()
 
     def printArray(self, liste, listname):
@@ -258,4 +279,3 @@ if __name__ == '__main__':
     while True:
         # superPlayer.startThreads()
         superPlayer.eingabe()
-
