@@ -10,7 +10,6 @@ import thread
 import time
 import colorama
 import readline
-import sys
 
 USER = sys.argv[1]
 PASSWORD = sys.argv[2]
@@ -22,6 +21,7 @@ class spotifyRPI(object):
         #os.system("sh /home/pi/sleepKill.sh &")
         
         #os.system("sh /home/pi/showPic.sh /home/pi/heartBW_klein.jpg")
+        #os.system("espeak 'i am alive. make some mofucking noise'")
         self.logged_in_event = threading.Event()
         self.vtitelliste = []
         self.vtitelcounter = 0
@@ -88,7 +88,9 @@ class spotifyRPI(object):
                 i -= 1
         # fil.write("wird noch ")
             fil.close()
-
+            if len(self.vtitelliste) > 0:
+	        with open('/home/pi/currentsong.txt', 'w') as current:
+	            current.write(self.vtitelliste[self.vtitelcounter].link.url)
             time.sleep(5)
     # thread.start_new_thread(self.askTelegram(),())
 
@@ -176,6 +178,7 @@ class spotifyRPI(object):
             if tmptrack.is_loaded and tmptrack.availability:
                 
                 self.vsession.player.load(tmptrack)
+                #os.system("espeak 'next track: %s'"%tmptrack.name)
                 self.vsession.player.play()
                 print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
                 print('______________________________')
@@ -238,8 +241,6 @@ class spotifyRPI(object):
         self.vtitelliste.insert(self.vtitelcounter+1+position, songs2add)
 
 
-
-
     def searchy(self, vsucheingabe):
         endMarker = vsucheingabe[-1]
         suchString = vsucheingabe[:-1]
@@ -268,7 +269,14 @@ class spotifyRPI(object):
             self.randomizePlaylist()
             self.playSong()
             print("pack die chicha aus, mausebacke")
-
+        elif 'https' in vsucheingabe:
+        	print("oha...neuste technik am start alter")
+        	spID = vsucheingabe[-22:]
+        	#print(spID)
+        	track = self.vsession.get_track('spotify:track:%s'%spID).load()
+        	#print track.name
+        	self.add2Playlist(track)
+        	#self.playSong()
         elif endMarker == '?':
             vsuche = self.suche(str(suchString))
             self.addSearch2Playlist(vsuche)
