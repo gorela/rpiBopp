@@ -295,7 +295,7 @@ class spotifyRPI(object):
                 valbumbrowser = vsuche.tracks[0].album.browse()
                 valbumbrowser.load()
                 self.addSearch2Playlist(valbumbrowser)
-                # self.playSong()
+                self.playSong()
         elif endMarker == '+':
             vsuche = self.suche(str(suchString))
             self.add2Playlist(vsuche.tracks[0])
