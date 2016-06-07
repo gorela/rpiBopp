@@ -38,27 +38,26 @@ class spotifyRPI(object):
             spotify.SessionEvent.CONNECTION_STATE_UPDATED,
             self.connection_state_listener)
 
-        self.vaudio = spotify.PortAudioSink(self.vsession)
+        self.vaudio = spotify.AlsaSink(self.vsession)
+        # self.vaudio = spotify.PortAudioSink(self.vsession)
         self.vloop = spotify.EventLoop(self.vsession)
         self.vloop.start()
 
         self.vsession.login(USER, PASSWORD)
-
         while not self.logged_in_event.wait(0.1):
             self.vsession.process_events()
-
         self.INIT = 0x00
         self.NOSONGS = 0x01
         self.PLAY = 0x02
 
         self.showPics = False
 
-        self.callMeNames = ["Sir","Meister","maeuschen","kleiner","alter","lauch"]
+        self.callMeNames = ["Sir","Meister","maeuschen","kleiner","alter","lauch","sportskanone","max","pepe","stinker"]
 
         self.state = self.INIT
         if(int(self.vsession.connection.state) == 1):
             os.system("clear")
-            print("...hat geklappt alter!!!")
+            print("...hat geklappt  %s!!!"%self.callMe())
             thread.start_new_thread(self.askTelegram, ())
             # thread.start_new_thread(self.eingabe,())
 
@@ -110,12 +109,13 @@ class spotifyRPI(object):
 
     def longSearch(self):
         try:
-            vsucheingabe = raw_input("Welchen Kuenstler soll ich spielen, %s ?"%self.callMeNames[randint(0,len(self.callMeNames)-1)]).encode("utf8")
+            vsucheingabe = raw_input("Welchen Kuenstler soll ich spielen, %s?"%self.callMe()).encode("utf8")
+            print(vsucheingabe)
             if vsucheingabe:
                 vsuche = self.suche(str(vsucheingabe))
                 if vsuche.artists:
                     self.printArray(vsuche.artists, "artists")
-                    vartisteingabe = raw_input('welchen von denen, alter? ')
+                    vartisteingabe = raw_input("welchen von denen, %s?"%self.callMe())
                     if vartisteingabe.isdigit():
                         vartist = self.vsession.get_artist(
                             vsuche.artists[int(vartisteingabe)].link.uri)
@@ -129,7 +129,7 @@ class spotifyRPI(object):
                             time.sleep(0.7)
                             self.printArray(valbums, "albums")
 
-                        valbumeingabe = raw_input('welches album solls sein, maeuschen? ')
+                        valbumeingabe = raw_input("welches album solls sein, %s?"%self.callMe())
 
                         if valbumeingabe.isdigit():
                             valbum = self.vsession.get_album(
@@ -142,7 +142,7 @@ class spotifyRPI(object):
 
                             self.printArray(vtracks, "tracks")
 
-                            vtiteleingabe = raw_input('track nummer? ')
+                            vtiteleingabe = raw_input("track nummer %s?"%self.callMe())
                             if vtiteleingabe.isdigit():
 
                                 self.vtitelcounter = int(vtiteleingabe)
@@ -193,13 +193,13 @@ class spotifyRPI(object):
                 print('\n\n\n\n\n\n\n\n\n\n\n\n')
                 self.getCover(tmptrack)
             else:
-                print 'leider doch nicht...irgendwie nicht auffindbar'
+                print "leider doch nicht %s...irgendwie nicht auffindbar"%self.callMe()
         else:
             if(self.state != self.NOSONGS):
                 self.state = self.NOSONGS
                 if self.showPics:
                     os.system("sh /home/pi/showPic.sh /home/pi/franzl_knarre_klein.jpg")
-                print "keine songs mehr alter lauch..."
+                print "keine songs mehr %s"%self.callMe()
 
     def showPic(self, path):
         if self.showPics:
@@ -264,7 +264,7 @@ class spotifyRPI(object):
         elif vsucheingabe == 'n':
             self.playNextSong()
         elif vsucheingabe == 'ls':
-            self.printArray(self.vtitelliste[self.vtitelcounter:], "datt steht an")
+            self.printArray(self.vtitelliste[self.vtitelcounter:], "datt steht an %s"%self.callMe())
         elif vsucheingabe == "latin":
             vsuche = self.suche("roots of chicha", trackCount = 100)
             self.replacePlaylistWithSearch(vsuche)
@@ -272,7 +272,7 @@ class spotifyRPI(object):
             self.playSong()
             print("pack die chicha aus, mausebacke")
         elif 'https' in vsucheingabe:
-        	print("oha...neuste technik am start alter")
+        	print("oha...neuste technik am start %s"%self.callMe())
         	spID = vsucheingabe[-22:]
 
         	#print(spID)
@@ -315,7 +315,7 @@ class spotifyRPI(object):
                     print("%s (%s)"%(self.vtitelliste[-1].name,self.vtitelliste[-1].artists[0].name))
                     print('')
             else:
-                print("\nhabe nix gefunden, aber \nlegastenie kann behandelt werden, dj")
+                print("\nhabe nix gefunden, aber \nlegastenie kann behandelt werden, %s"%self.callMe())
 
         if vsucheingabe == 'stop':
             self.vsession.player.pause()
@@ -327,20 +327,24 @@ class spotifyRPI(object):
 
     def printArray(self, liste, listname):
         count = len(liste)-1
+        tmpname = ''
         print('')
         print(listname)
         print('______________________________')
         print('')
-        if listname == 'albums':
-        	#liste.sort(key = lambda x: x.year)
-        #for a in reversed(liste):
+        for a in reversed(liste):
             if listname == 'albums':
-                print(str(count) + '...' + a.name + ' ' + str(a.year) + ' ' + str(a.type))
+            	if tmpname != a.name:
+            		tmpname = a.name 
+                	print(str(count) + '...' + a.name + ' ' + str(a.year) + ' ' + str(a.type))
             else:
                 print(str(count) + '...' + a.name)
             count -= 1
         print('______________________________')
     print('')
+
+    def callMe(self):
+    	return self.callMeNames[randint(0,len(self.callMeNames)-1)]
 
     def startThreads(self):
         thread.start_new_thread(self.askTelegram, ())
