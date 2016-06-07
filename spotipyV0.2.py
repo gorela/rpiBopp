@@ -118,7 +118,8 @@ class spotifyRPI(object):
 
     def longSearch(self):
         try:
-            request = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').encode("utf8")
+        	encoding = 'utf-8' if sys.stdin.encoding in (None, 'ascii') else sys.stdin.encoding
+            request = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').decode(encoding)
             if request:
                 results = self._suche(str(request), type='artist')
                 print results
