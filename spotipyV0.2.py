@@ -1,4 +1,5 @@
 #!/usr/bin/env python2.7
+# coding=UTF-8
 
 import spotify
 import threading
@@ -10,6 +11,7 @@ import thread
 import time
 import colorama
 import readline
+import spotipy
 
 USER = sys.argv[1]
 PASSWORD = sys.argv[2]
@@ -19,7 +21,7 @@ class spotifyRPI(object):
     def __init__(self):
         print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n.....init...............")
         #os.system("sh /home/pi/sleepKill.sh &")
-        
+
         #os.system("sh /home/pi/showPic.sh /home/pi/heartBW_klein.jpg")
         #os.system("espeak 'i am alive. make some mofucking noise'")
         self.logged_in_event = threading.Event()
@@ -54,6 +56,10 @@ class spotifyRPI(object):
         self.showPics = False
 
         self.state = self.INIT
+
+        # instantiate spotipy object:
+        self.spotipy = spotipy.Spotify()
+
         if(int(self.vsession.connection.state) == 1):
             os.system("clear")
             print("...hat geklappt alter!!!")
@@ -66,20 +72,20 @@ class spotifyRPI(object):
 
     def end_track_listener(self, session):
         if(self.state != self.NOSONGS):
-            print('am arsch')    
+            print('am arsch')
             # self.vtitelcounter += 1
         self.playNextSong()
         self.state = self.NOSONGS
 
     def askTelegram(self):
         while(True):
-            fil = open('/home/pi/yay.txt', 'a+b')
-            if(fil):
-                lastinput = fil.readlines()[-1].replace("\n", "").encode("utf8")
+            # fil = open('/home/pi/yay.txt', 'a+b')
+            # if(fil):
+            lastinput = fil.readlines()[-1].replace("\n", "").encode("utf8")
             if(lastinput != "zonk"):
                 self.searchy(lastinput)
                 fil.write("zonk\n")
-            fil.close()
+            # fil.close()
             # print to playlist.txt for telegram
             fil = open("/home/pi/playlist.txt", 'w')
             i = len(self.vtitelliste[self.vtitelcounter:])
@@ -92,6 +98,10 @@ class spotifyRPI(object):
 	        with open('/home/pi/currentsong.txt', 'w') as current:
 	            current.write(self.vtitelliste[self.vtitelcounter].link.url)
             time.sleep(5)
+
+            import time
+
+
     # thread.start_new_thread(self.askTelegram(),())
 
     def getCover(self,track):
@@ -108,55 +118,55 @@ class spotifyRPI(object):
 
     def longSearch(self):
         try:
-            vsucheingabe = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').encode("utf8")
-            if vsucheingabe:
-                vsuche = self.suche(str(vsucheingabe))
-                if vsuche.artists:
-                    self.printArray(vsuche.artists, "artists")
-                    vartisteingabe = raw_input('welchen von denen, alter? ')
-                    if vartisteingabe.isdigit():
-                        vartist = self.vsession.get_artist(
-                            vsuche.artists[int(vartisteingabe)].link.uri)
-                        print vartist.load().name
+            request = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').encode("utf8")
+            if request:
+                results = self._suche(str(request), type='artist')
+                print results
+                results = results['artists']
+                if results.get('items'):
+                    artists = results['items']
+                    self._printArray(artists)
+                    # count = len(artists)-1
+                    #XXX Check error handling with non integer input
+                    request = raw_input('welchen von denen, alter? ')
+                    if request.isdigit():
+                        request = int(request)
+                        uri = artists[request]['uri']
+                        #TODO handle different album types like singles etc
+                        results = self.spotipy.artist_albums(uri, album_type='album', country='DE')
+                        albums = results['items']
+                        while results['next']:
+                            results = self.spotipy.next(results)
+                            albums.extend(results['items'])
 
-                        vartistbrowser = vartist.browse()
-                        vartistbrowser.load()
+                        self._printArray(albums)
 
-                        if vartistbrowser.is_loaded:
-                            valbums = vartistbrowser.albums
-                            time.sleep(0.7)
-                            self.printArray(valbums, "albums")
+                        request = raw_input('welchen von denen, alter? ')
+                        if request.isdigit():
+                            request = int(request)
+                            album_id = albums[request]['id']
+                            #TODO handle different album types like singles etc
+                            results = self.spotipy.album_tracks(album_id)
+                            titles = results['items']
+                            while results['next']:
+                                results = self.spotipy.next(results)
+                                titles.extend(results['items'])
+                            self._printArray(titles)
+                            request = raw_input('track number?')
+                            if request.isdigit():
+                                request = int(request)
+                                self.vtitelcounter = request
+                                title_query = [self.vsession.get_track(title['uri']) for title in titles]
 
-                        valbumeingabe = raw_input('welches album solls sein, maeuschen? ')
+                                self.vtitelliste = title_query
+                                track = title_query[int(request)]
+                                track.load()
+                                if track.is_loaded:
+                                    self.vsession.player.load(track)
 
-                        if valbumeingabe.isdigit():
-                            valbum = self.vsession.get_album(
-                                valbums[int(valbumeingabe)].link.uri)
-                            valbumbrowser = valbum.browse()
-                            valbumbrowser.load()
-                            print '///////////////////////////////'
-                            print valbumbrowser.is_loaded
-                            vtracks = valbumbrowser.tracks
-
-                            self.printArray(vtracks, "tracks")
-
-                            vtiteleingabe = raw_input('track nummer? ')
-                            if vtiteleingabe.isdigit():
-
-                                self.vtitelcounter = int(vtiteleingabe)
-                                self.vtitelliste = [t for t in vtracks]
-                                for tr in self.vtitelliste:
-                                    print tr.name
-                                    print tr.link.uri
-                                    print tr.availability
-                                print type(self.vtitelliste)
-                                if vtracks[int(vtiteleingabe)].availability:
-                                    self.vsession.player.load(vtracks[int(vtiteleingabe)])
-
-                                if vtracks:
-                                    print "shiiiit"
-                                    self.vsession.player.play()
-                                    self.playSong()
+                                    if title_query:
+                                        self.vsession.player.play()
+                                        self.playSong()
             else:
                 print("kakkvogel")
         except IndexError:
@@ -176,7 +186,7 @@ class spotifyRPI(object):
             self.state = self.PLAY
             tmptrack = self.vtitelliste[int(self.vtitelcounter)]
             if tmptrack.is_loaded and tmptrack.availability:
-                
+
                 self.vsession.player.load(tmptrack)
                 #os.system("espeak 'next track: %s'"%tmptrack.name)
                 self.vsession.player.play()
@@ -225,16 +235,21 @@ class spotifyRPI(object):
             time.sleep(0.5)
         return tmpSuche
 
+    def _suche(self, input, type):
+        """ type= ‘artist’, ‘album’, ‘track’ or ‘playlist’
+        """
+        return self.spotipy.search(input, limit=10, offset=0, type=type)
+
     def replacePlaylistWithSearch(self, suche):
-        self.vtitelliste = [t for t in suche.tracks]  
-        self.vtitelcounter = 0 
+        self.vtitelliste = [t for t in suche.tracks]
+        self.vtitelcounter = 0
 
     def addSearch2Playlist(self, suche):
         ret = 0
         for t in suche.tracks:
             if t.availability:
                 ret = 1
-                self.vtitelliste.append(t) 
+                self.vtitelliste.append(t)
         return ret
 
     def add2Playlist(self, songs2add, position = 0):
@@ -280,7 +295,7 @@ class spotifyRPI(object):
         elif endMarker == '?':
             vsuche = self.suche(str(suchString))
             self.addSearch2Playlist(vsuche)
-            self.randomizePlaylist()            
+            self.randomizePlaylist()
             # self.playSong()
         elif endMarker == '!':
             vsuche = self.suche(str(suchString),trackCount=1)
@@ -336,6 +351,19 @@ class spotifyRPI(object):
         print('______________________________')
     print('')
 
+    def _printArray(self, results):
+        count = len(results)-1
+        print('')
+        print(type)
+        print('______________________________')
+        print('')
+        # TODO check if ifs are necessary
+        for result in reversed(results):
+            print(str(count) + '...' + result['name'])
+            count -= 1
+        print('______________________________')
+    print('')
+
     def startThreads(self):
         thread.start_new_thread(self.askTelegram, ())
         thread.start_new_thread(self.eingabe, ())
@@ -346,4 +374,3 @@ if __name__ == '__main__':
     while True:
         # superPlayer.startThreads()
         superPlayer.eingabe()
-
