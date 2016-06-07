@@ -139,7 +139,7 @@ class spotifyRPI(object):
                             print '///////////////////////////////'
                             print valbumbrowser.is_loaded
                             vtracks = valbumbrowser.tracks
-                            vtracks = self.killDuplicates(vtracks)
+                            #vtracks = self.killDuplicates(vtracks)
                             self.printArray(vtracks, "tracks")
 
                             vtiteleingabe = raw_input("track nummer %s?"%self.callMe())
@@ -242,7 +242,7 @@ class spotifyRPI(object):
     def add2Playlist(self, songs2add, position = 0):
         self.vtitelliste.insert(self.vtitelcounter+1+position, songs2add)
 
-    def killDuplicates(tracks)
+    #def killDuplicates(tracks)
 
     def searchy(self, vsucheingabe):
         endMarker = vsucheingabe[-1]
