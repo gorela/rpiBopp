@@ -38,7 +38,7 @@ class spotifyRPI(object):
             spotify.SessionEvent.CONNECTION_STATE_UPDATED,
             self.connection_state_listener)
 
-        self.vaudio = spotify.AlsaSink(self.vsession)
+        self.vaudio = spotify.PortAudioSink(self.vsession)
         self.vloop = spotify.EventLoop(self.vsession)
         self.vloop.start()
 
@@ -52,6 +52,8 @@ class spotifyRPI(object):
         self.PLAY = 0x02
 
         self.showPics = False
+
+        self.callMeNames = ["Sir","Meister","maeuschen","kleiner","alter","lauch"]
 
         self.state = self.INIT
         if(int(self.vsession.connection.state) == 1):
@@ -108,7 +110,7 @@ class spotifyRPI(object):
 
     def longSearch(self):
         try:
-            vsucheingabe = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').encode("utf8")
+            vsucheingabe = raw_input("Welchen Kuenstler soll ich spielen, %s ?"%self.callMeNames[randint(0,len(self.callMeNames)-1)]).encode("utf8")
             if vsucheingabe:
                 vsuche = self.suche(str(vsucheingabe))
                 if vsuche.artists:
@@ -207,7 +209,7 @@ class spotifyRPI(object):
         encoding = 'utf-8' if sys.stdin.encoding in (None, 'ascii') else sys.stdin.encoding
         vsucheingabe = raw_input('?').decode(encoding)
         if(vsucheingabe):
-            self.searchy(vsucheingabe.encode('utf-8').lower())
+            self.searchy(vsucheingabe.encode('utf-8'))
 
 
     def randomizePlaylist(self):
@@ -273,11 +275,13 @@ class spotifyRPI(object):
         elif 'https' in vsucheingabe:
         	print("oha...neuste technik am start alter")
         	spID = vsucheingabe[-22:]
+
         	#print(spID)
         	track = self.vsession.get_track('spotify:track:%s'%spID).load()
         	#print track.name
         	self.add2Playlist(track)
         	#self.playSong()
+
         elif endMarker == '?':
             vsuche = self.suche(str(suchString))
             self.addSearch2Playlist(vsuche)
@@ -291,7 +295,7 @@ class spotifyRPI(object):
                 valbumbrowser = vsuche.tracks[0].album.browse()
                 valbumbrowser.load()
                 self.addSearch2Playlist(valbumbrowser)
-                self.playSong()
+                # self.playSong()
         elif endMarker == '+':
             vsuche = self.suche(str(suchString))
             self.add2Playlist(vsuche.tracks[0])
@@ -328,7 +332,9 @@ class spotifyRPI(object):
         print(listname)
         print('______________________________')
         print('')
-        for a in reversed(liste):
+        if listname == 'albums':
+        	#liste.sort(key = lambda x: x.year)
+        #for a in reversed(liste):
             if listname == 'albums':
                 print(str(count) + '...' + a.name + ' ' + str(a.year) + ' ' + str(a.type) + ' ' + str(a.link))
             else:
