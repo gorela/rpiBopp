@@ -339,7 +339,7 @@ class spotifyRPI(object):
             		tmpname = a.name 
                 	print(str(count) + '...' + a.name + ' ' + str(a.year) + ' ' + str(a.type))
             else:
-                print(str(count) + '...' + a.name + str(a.link))
+                print(str(count) + '...' + a.name)
             count -= 1
         print('______________________________')
     print('')
