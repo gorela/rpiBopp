@@ -1,5 +1,5 @@
 #!/bin/bash
-#rm /home/pi/yay.txt
+rm /home/pi/yay.txt
 echo 'zonk' >> /home/pi/yay.txt
 # Increase volume by 2%
 alias volu='sudo amixer set PCM -- $[$(amixer get PCM|grep -o [0-9]*%|sed 's/%//')+2]%'
