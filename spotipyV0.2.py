@@ -1,27 +1,120 @@
 #!/usr/bin/env python2.7
 # coding=UTF-8
 
-import spotify
 import threading
-from random import randint
-from random import shuffle
+import subprocess
 import os
 import sys
 import thread
 import time
+import select
+# import msvcrt
+from random import randint
+from random import shuffle
+from multiprocessing.dummy import Pool, Process
+from multiprocessing.dummy import Queue as ThreadQueue
+
 import colorama
 import readline
 import spotipy
+import spotify
+from pytg.sender import Sender
+from pytg.receiver import Receiver
+from pytg.utils import coroutine
+
+'''
+TODO: with multiprocessing/threading and subprocessing telegram-cli,
+do a proper clean-up when receiving SIGINT
+'''
+
+# import logging
+# logging.basicConfig(filename='log.LOG', level=logging.DEBUG)
+
 
 USER = sys.argv[1]
 PASSWORD = sys.argv[2]
+PATH_TO_TELEGRAM_CLI = '/usr/bin/telegram-cli'
+PATH_TO_TELEGRAM_PUBKEY = '/etc/telegram-cli/server.pub'
+
+class Telegram(object):
+    def __init__(self, callback, callback_queue, json_port=4458):
+        # Telegram: TODO check if port is open
+        self.json_port = json_port
+        self.receiver = Receiver(host="localhost", port=json_port)
+        self.sender = Sender(host="localhost", port=json_port)
+        self.callback_queue = callback_queue
+        self.callback = callback
+        self.cli = None
+
+        # start receiving messages
+        # already thre"ading??
+
+    def start_cli(self):
+        # TODO: check if telegram-cli is installed, else skip telegram functionality
+        process = subprocess.Popen([PATH_TO_TELEGRAM_CLI + ' --json' + ' -P {}'.format(self.json_port)
+                                    +'-k {}'.format(PATH_TO_TELEGRAM_PUBKEY)],
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             bufsize=0,
+                             shell=True) # FIXME: without shell=True due to security issues
+        # # stdout output:
+        # while process.poll() is None:
+        #     l = process.stdout.readline() # This blocks until it receives a newline.
+        #     print l
+        # # When the subprocess terminates there might be unconsumed output
+        # # that still needs to be processed.
+        # print process.stdout.read()
+
+        self.cli = process
+        return process
+
+    def start(self):
+        self.receiver.start()
+        print 'start internally invoked'
+        time.sleep(1)
+        self.loop = Process(target=self.receiver.message, args=(self.telegram_loop(),) )
+        self.loop.daemon = True
+        self.loop.start()
+
+    @coroutine
+    def telegram_loop(self):  # name "example_function" and given parameters are defined in main()
+        quit = False
+        try:
+            while not quit:  # loop for messages
+                msg = (yield)  # it waits until the generator has a has message here.
+                self.sender.status_online()  # so we will stay online.
+                # (if we are offline it might not receive the messages instantly,
+                #  but eventually we will get them)
+                if msg.event != "message":
+                    continue  # is not a message.
+                if msg.own:  # the bot has send this message.
+                    continue  # we don't want to process this message.
+                if msg.text is None:  # we have media instead.
+                    continue  # and again, because we want to process only text message.
+                if msg.text:
+                    # sender.send_msg(msg.peer.cmd, u"selber!")
+                    # self.searchy(msg.text)
+                    print msg.text
+                    # TODO: unicode support, python3?
+                    self.callback_queue.put(msg.text)
+                    # sender.send_msg(msg.peer.cmd, "Astreine wahl, der Herr.")
+
+        except GeneratorExit:
+            # the generator (pytg) exited (got a KeyboardIterrupt).
+            pass
+        except KeyboardInterrupt:
+            # we got a KeyboardIterrupt(Ctrl+C)
+            self.receiver.stop()
+        else:
+            # the loop exited without exception, becaues _quit was set True
+            pass
 
 class spotifyRPI(object):
 
     def __init__(self):
         print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n.....init...............")
         #os.system("sh /home/pi/sleepKill.sh &")
-
+        self.callback_queue = ThreadQueue()
         #os.system("sh /home/pi/showPic.sh /home/pi/heartBW_klein.jpg")
         #os.system("espeak 'i am alive. make some mofucking noise'")
         self.logged_in_event = threading.Event()
@@ -57,14 +150,11 @@ class spotifyRPI(object):
 
         self.state = self.INIT
 
-        # instantiate spotipy object:
+        # instantiate spotipy object for easy search queries through the WebAPI
         self.spotipy = spotipy.Spotify()
 
-        if(int(self.vsession.connection.state) == 1):
-            os.system("clear")
-            print("...hat geklappt alter!!!")
-            thread.start_new_thread(self.askTelegram, ())
-            # thread.start_new_thread(self.eingabe,())
+
+
 
     def connection_state_listener(self, session):
         if session.connection.state is spotify.ConnectionState.LOGGED_IN:
@@ -77,30 +167,31 @@ class spotifyRPI(object):
         self.playNextSong()
         self.state = self.NOSONGS
 
-    def askTelegram(self):
-        while(True):
-            # fil = open('/home/pi/yay.txt', 'a+b')
-            # if(fil):
-            lastinput = fil.readlines()[-1].replace("\n", "").encode("utf8")
-            if(lastinput != "zonk"):
-                self.searchy(lastinput)
-                fil.write("zonk\n")
-            # fil.close()
-            # print to playlist.txt for telegram
-            fil = open("/home/pi/playlist.txt", 'w')
-            i = len(self.vtitelliste[self.vtitelcounter:])
-            for song in reversed(self.vtitelliste[self.vtitelcounter:]):
-                fil.write(str(i) + " " + song.name.encode("utf8") + "\n" + song.artists[0].name.encode("utf8") + "\n----------------\n")
-                i -= 1
-        # fil.write("wird noch ")
-            fil.close()
-            if len(self.vtitelliste) > 0:
-	        with open('/home/pi/currentsong.txt', 'w') as current:
-	            current.write(self.vtitelliste[self.vtitelcounter].link.url)
-            time.sleep(5)
 
-            import time
 
+    # def askTelegram(self):
+        # while(True):
+        #     # fil = open('/home/pi/yay.txt', 'a+b')
+        #     # if(fil):
+        #     lastinput = fil.readlines()[-1].replace("\n", "").encode("utf8")
+        #     if(lastinput != "zonk"):
+        #         self.searchy(lastinput)
+        #         fil.write("zonk\n")
+        #     # fil.close()
+        #     # print to playlist.txt for telegram
+        #     fil = open("/home/pi/playlist.txt", 'w')
+        #     i = len(self.vtitelliste[self.vtitelcounter:])
+        #     for song in reversed(self.vtitelliste[self.vtitelcounter:]):
+        #         fil.write(str(i) + " " + song.name.encode("utf8") + "\n" + song.artists[0].name.encode("utf8") + "\n----------------\n")
+        #         i -= 1
+        # # fil.write("wird noch ")
+        #     fil.close()
+        #     if len(self.vtitelliste) > 0:
+	    #     with open('/home/pi/currentsong.txt', 'w') as current:
+	    #         current.write(self.vtitelliste[self.vtitelcounter].link.url)
+        #     time.sleep(5)
+        #
+        #     import time
 
     # thread.start_new_thread(self.askTelegram(),())
 
@@ -118,7 +209,7 @@ class spotifyRPI(object):
 
     def longSearch(self):
         try:
-        	encoding = 'utf-8' if sys.stdin.encoding in (None, 'ascii') else sys.stdin.encoding
+            encoding = 'utf-8' if sys.stdin.encoding in (None, 'ascii') else sys.stdin.encoding
             request = raw_input('Welchen Kuenstler soll ich spielen, Sir ?').decode(encoding)
             if request:
                 results = self._suche(str(request), type='artist')
@@ -218,7 +309,9 @@ class spotifyRPI(object):
         encoding = 'utf-8' if sys.stdin.encoding in (None, 'ascii') else sys.stdin.encoding
         vsucheingabe = raw_input('?').decode(encoding)
         if(vsucheingabe):
-            self.searchy(vsucheingabe.encode('utf-8').lower())
+            query = vsucheingabe.encode('utf-8').lower()
+            self.callback_queue.put(query)
+
 
 
     def randomizePlaylist(self):
@@ -370,8 +463,49 @@ class spotifyRPI(object):
         thread.start_new_thread(self.eingabe, ())
         time.sleep(10)
 
-if __name__ == '__main__':
-    superPlayer = spotifyRPI()
+
+def wait_for_key(keypress):
+    keypress = msvcrt.kbhit()
+
+def main_loop(player):
+    import Queue
+    ## FIXME: keypress handling not properly implemented
+    #         only start eingabe when enter is pressed
+    # If there's input ready, do something, else do something
+    # else. Note timeout is zero so select won't block at all.
+    print 'mainloop invoked'
     while True:
-        # superPlayer.startThreads()
-        superPlayer.eingabe()
+        while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+            keypress = sys.stdin.read(1)
+            if keypress=='\n':
+                player.eingabe()
+            elif keypress != '':
+                continue
+            else: # an empty line means stdin has been closed
+                print('eof')
+                exit(0)
+        else:
+            try:
+                command = player.callback_queue.get_nowait()
+                player.searchy(command)
+            except Queue.Empty:
+                continue
+
+if __name__ == '__main__':
+    player = spotifyRPI()
+    telegram = Telegram(
+        callback=player.searchy,
+        callback_queue=player.callback_queue,
+        )
+    telegram_cli = telegram.start_cli()
+    # TODO: block until TG-CLI is started and active
+    time.sleep(5)
+    telegram.start()
+
+    if(int(player.vsession.connection.state) == 1):
+        os.system("clear")
+        print("...hat geklappt alter!!!")
+    else:
+        print('Spotify not connected properly')
+
+    main_loop(player)
