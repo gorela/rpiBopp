@@ -36,6 +36,10 @@ PASSWORD = sys.argv[2]
 PATH_TO_TELEGRAM_CLI = '/usr/bin/telegram-cli'
 PATH_TO_TELEGRAM_PUBKEY = '/etc/telegram-cli/server.pub'
 
+INIT = 0x00
+NOSONGS = 0x01
+PLAY = 0x02
+
 class Telegram(object):
     def __init__(self, callback, callback_queue, json_port=4458):
         # Telegram: TODO check if port is open
@@ -118,37 +122,35 @@ class spotifyRPI(object):
         #os.system("sh /home/pi/showPic.sh /home/pi/heartBW_klein.jpg")
         #os.system("espeak 'i am alive. make some mofucking noise'")
         self.logged_in_event = threading.Event()
-        self.vtitelliste = []
-        self.vtitelcounter = 0
-        self.vconfig = spotify.Config()
-        self.vconfig.user_agent = "raspberry pi"
-        self.vconfig.device_id = "123456789"
+        self.track_queue = []
+        self.qpos_current = 0
+        self.config = spotify.Config()
+        self.config.user_agent = "raspberry pi"
+        self.config.device_id = "123456789"
 
-        self.vsession = spotify.Session(config=self.vconfig)
+        self.session = spotify.Session(config=self.config)
 
-        self.vsession.on(
+        self.session.on(
             spotify.SessionEvent.END_OF_TRACK, self.end_track_listener)
 
-        self.vsession.on(
+        self.session.on(
             spotify.SessionEvent.CONNECTION_STATE_UPDATED,
             self.connection_state_listener)
 
-        self.vaudio = spotify.AlsaSink(self.vsession)
-        self.vloop = spotify.EventLoop(self.vsession)
+        self.vaudio = spotify.AlsaSink(self.session)
+        self.vloop = spotify.EventLoop(self.session)
         self.vloop.start()
 
-        self.vsession.login(USER, PASSWORD)
+        self.session.login(USER, PASSWORD)
 
         while not self.logged_in_event.wait(0.1):
-            self.vsession.process_events()
+            self.session.process_events()
 
-        self.INIT = 0x00
-        self.NOSONGS = 0x01
-        self.PLAY = 0x02
+
 
         self.showPics = False
 
-        self.state = self.INIT
+        self.state = INIT
 
         # instantiate spotipy object for easy search queries through the WebAPI
         self.spotipy = spotipy.Spotify()
@@ -161,11 +163,11 @@ class spotifyRPI(object):
             self.logged_in_event.set()
 
     def end_track_listener(self, session):
-        if(self.state != self.NOSONGS):
+        if(self.state != NOSONGS):
             print('am arsch')
-            # self.vtitelcounter += 1
+            # self.qpos_current += 1
         self.playNextSong()
-        self.state = self.NOSONGS
+        self.state = NOSONGS
 
 
 
@@ -180,15 +182,15 @@ class spotifyRPI(object):
         #     # fil.close()
         #     # print to playlist.txt for telegram
         #     fil = open("/home/pi/playlist.txt", 'w')
-        #     i = len(self.vtitelliste[self.vtitelcounter:])
-        #     for song in reversed(self.vtitelliste[self.vtitelcounter:]):
+        #     i = len(self.track_queue[self.qpos_current:])
+        #     for song in reversed(self.track_queue[self.qpos_current:]):
         #         fil.write(str(i) + " " + song.name.encode("utf8") + "\n" + song.artists[0].name.encode("utf8") + "\n----------------\n")
         #         i -= 1
         # # fil.write("wird noch ")
         #     fil.close()
-        #     if len(self.vtitelliste) > 0:
+        #     if len(self.track_queue) > 0:
 	    #     with open('/home/pi/currentsong.txt', 'w') as current:
-	    #         current.write(self.vtitelliste[self.vtitelcounter].link.url)
+	    #         current.write(self.track_queue[self.qpos_current].link.url)
         #     time.sleep(5)
         #
         #     import time
@@ -247,17 +249,17 @@ class spotifyRPI(object):
                             request = raw_input('track number?')
                             if request.isdigit():
                                 request = int(request)
-                                self.vtitelcounter = request
-                                title_query = [self.vsession.get_track(title['uri']) for title in titles]
+                                self.qpos_current = request
+                                title_query = [self.session.get_track(title['uri']) for title in titles]
 
-                                self.vtitelliste = title_query
+                                self.track_queue = title_query
                                 track = title_query[int(request)]
                                 track.load()
                                 if track.is_loaded:
-                                    self.vsession.player.load(track)
+                                    self.session.player.load(track)
 
                                     if title_query:
-                                        self.vsession.player.play()
+                                        self.session.player.play()
                                         self.playSong()
             else:
                 print("kakkvogel")
@@ -269,19 +271,19 @@ class spotifyRPI(object):
             pass
 
     def playNextSong(self):
-        self.vtitelcounter += 1
+        self.qpos_current += 1
         self.playSong()
 
     def playSong(self):
-        if self.vtitelcounter < len(self.vtitelliste):
+        if self.qpos_current < len(self.track_queue):
             print('laeuft')
-            self.state = self.PLAY
-            tmptrack = self.vtitelliste[int(self.vtitelcounter)]
+            self.state = PLAY
+            tmptrack = self.track_queue[self.qpos_current]
             if tmptrack.is_loaded and tmptrack.availability:
 
-                self.vsession.player.load(tmptrack)
+                self.session.player.load(tmptrack)
                 #os.system("espeak 'next track: %s'"%tmptrack.name)
-                self.vsession.player.play()
+                self.session.player.play()
                 print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
                 print('______________________________')
                 print('')
@@ -295,8 +297,8 @@ class spotifyRPI(object):
             else:
                 print 'leider doch nicht...irgendwie nicht auffindbar'
         else:
-            if(self.state != self.NOSONGS):
-                self.state = self.NOSONGS
+            if(self.state != NOSONGS):
+                self.state = NOSONGS
                 if self.showPics:
                     os.system("sh /home/pi/showPic.sh /home/pi/franzl_knarre_klein.jpg")
                 print "keine songs mehr alter lauch..."
@@ -315,15 +317,15 @@ class spotifyRPI(object):
 
 
     def randomizePlaylist(self):
-        tempCurrSong = self.vtitelliste[self.vtitelcounter]
-        self.vtitelliste = self.vtitelliste[self.vtitelcounter+1:]
-        shuffle(self.vtitelliste)
-        self.vtitelliste.insert(0, tempCurrSong)
-        self.vtitelcounter = 0
+        tempCurrSong = self.track_queue[self.qpos_current]
+        self.track_queue = self.track_queue[self.qpos_current+1:]
+        shuffle(self.track_queue)
+        self.track_queue.insert(0, tempCurrSong)
+        self.qpos_current = 0
 
 
     def suche(self, suchString, trackCount = 10, albumCount = 10, artistCount = 10):
-        tmpSuche = self.vsession.search(suchString,track_count = trackCount, album_count = albumCount, artist_count = artistCount)
+        tmpSuche = self.session.search(suchString,track_count = trackCount, album_count = albumCount, artist_count = artistCount)
         tmpSuche.load(3)
         while not tmpSuche.is_loaded:
             time.sleep(0.5)
@@ -335,19 +337,19 @@ class spotifyRPI(object):
         return self.spotipy.search(input, limit=10, offset=0, type=type)
 
     def replacePlaylistWithSearch(self, suche):
-        self.vtitelliste = [t for t in suche.tracks]
-        self.vtitelcounter = 0
+        self.track_queue = [t for t in suche.tracks]
+        self.qpos_current = 0
 
     def addSearch2Playlist(self, suche):
         ret = 0
         for t in suche.tracks:
             if t.availability:
                 ret = 1
-                self.vtitelliste.append(t)
+                self.track_queue.append(t)
         return ret
 
     def add2Playlist(self, songs2add, position = 0):
-        self.vtitelliste.insert(self.vtitelcounter+1+position, songs2add)
+        self.track_queue.insert(self.qpos_current+1+position, songs2add)
 
 
     def searchy(self, vsucheingabe):
@@ -371,7 +373,7 @@ class spotifyRPI(object):
         elif vsucheingabe == 'n':
             self.playNextSong()
         elif vsucheingabe == 'ls':
-            self.printArray(self.vtitelliste[self.vtitelcounter:], "datt steht an")
+            self.printArray(self.track_queue[self.qpos_current:], "datt steht an")
         elif vsucheingabe == "latin":
             vsuche = self.suche("roots of chicha", trackCount = 100)
             self.replacePlaylistWithSearch(vsuche)
@@ -382,7 +384,7 @@ class spotifyRPI(object):
         	print("oha...neuste technik am start alter")
         	spID = vsucheingabe[-22:]
         	#print(spID)
-        	track = self.vsession.get_track('spotify:track:%s'%spID).load()
+        	track = self.session.get_track('spotify:track:%s'%spID).load()
         	#print track.name
         	self.add2Playlist(track)
         	#self.playSong()
@@ -394,8 +396,8 @@ class spotifyRPI(object):
         elif endMarker == '!':
             vsuche = self.suche(str(suchString),trackCount=1)
             if(vsuche.tracks):
-                self.vtitelliste = [t for t in vsuche.tracks]
-                self.vtitelcounter = 0
+                self.track_queue = [t for t in vsuche.tracks]
+                self.qpos_current = 0
                 valbumbrowser = vsuche.tracks[0].album.browse()
                 valbumbrowser.load()
                 self.addSearch2Playlist(valbumbrowser)
@@ -411,19 +413,19 @@ class spotifyRPI(object):
         else:
             vsuche = self.suche(str(vsucheingabe), trackCount = 1)
             if self.addSearch2Playlist(vsuche):
-                if(self.vsession.player.state.encode("utf8") in "unloaded" or self.vsession.player.state.encode("utf8") in "paused"):
+                if(self.session.player.state.encode("utf8") in "unloaded" or self.session.player.state.encode("utf8") in "paused"):
                     self.playSong()
                 else:
-                    tmpDiff = len(self.vtitelliste)-self.vtitelcounter-1
+                    tmpDiff = len(self.track_queue)-self.qpos_current-1
                     print('')
                     print("coming up next... in %s songs"%tmpDiff)
-                    print("%s (%s)"%(self.vtitelliste[-1].name,self.vtitelliste[-1].artists[0].name))
+                    print("%s (%s)"%(self.track_queue[-1].name,self.track_queue[-1].artists[0].name))
                     print('')
             else:
                 print("\nhabe nix gefunden, aber \nlegastenie kann behandelt werden, dj")
 
         if vsucheingabe == 'stop':
-            self.vsession.player.pause()
+            self.session.player.pause()
 
         if vsucheingabe == 'checki':
             print spotify.AudioBufferStats.stutter
@@ -502,7 +504,7 @@ if __name__ == '__main__':
     time.sleep(5)
     telegram.start()
 
-    if(int(player.vsession.connection.state) == 1):
+    if(int(player.session.connection.state) == 1):
         os.system("clear")
         print("...hat geklappt alter!!!")
     else:
