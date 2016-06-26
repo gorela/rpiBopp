@@ -97,7 +97,7 @@ class Telegram(object):
                     continue  # and again, because we want to process only text message.
                 if msg.text:
                     # sender.send_msg(msg.peer.cmd, u"selber!")
-                    # self.searchy(msg.text)
+                    # self.command_handler(msg.text)
                     print msg.text
                     # TODO: unicode support, python3?
                     self.callback_queue.put(msg.text)
@@ -177,7 +177,7 @@ class spotifyRPI(object):
         #     # if(fil):
         #     lastinput = fil.readlines()[-1].replace("\n", "").encode("utf8")
         #     if(lastinput != "zonk"):
-        #         self.searchy(lastinput)
+        #         self.command_handler(lastinput)
         #         fil.write("zonk\n")
         #     # fil.close()
         #     # print to playlist.txt for telegram
@@ -307,11 +307,11 @@ class spotifyRPI(object):
         if self.showPics:
             os.system("fbi -noverbose -t 5 %s" % path)
 
-    def eingabe(self):
+    def user_input(self):
         encoding = 'utf-8' if sys.stdin.encoding in (None, 'ascii') else sys.stdin.encoding
-        vsucheingabe = raw_input('?').decode(encoding)
-        if(vsucheingabe):
-            query = vsucheingabe.encode('utf-8').lower()
+        query = raw_input('?').decode(encoding)
+        if(query):
+            query = query.encode('utf-8').lower()
             self.callback_queue.put(query)
 
 
@@ -352,67 +352,67 @@ class spotifyRPI(object):
         self.track_queue.insert(self.qpos_current+1+position, songs2add)
 
 
-    def searchy(self, vsucheingabe):
-        endMarker = vsucheingabe[-1]
-        suchString = vsucheingabe[:-1]
+    def command_handler(self, command):
+        endMarker = command[-1]
+        suchString = command[:-1]
 
-        if vsucheingabe == 'q':
+        if command == 'q':
             sys.exit()
-        if vsucheingabe == 's':
+        if command == 's':
             self.longSearch()
-        elif 's ' in vsucheingabe[:2]:
-            vsuche = self.suche(str(vsucheingabe[2:]))
-            if vsuche.artists:
-                self.printArray(vsuche.artists, 'artists')
-            if vsuche.albums:
-                self.printArray(vsuche.albums, 'albums')
-            if vsuche.tracks:
-                self.printArray(vsuche.tracks, 'tracks')
-            if vsuche.did_you_mean:
-                self.printArray(vsuche.did_you_mean, 'did u mean')
-        elif vsucheingabe == 'n':
+        elif 's ' in command[:2]:
+            query = self.suche(str(command[2:]))
+            if query.artists:
+                self.printArray(query.artists, 'artists')
+            if query.albums:
+                self.printArray(query.albums, 'albums')
+            if query.tracks:
+                self.printArray(query.tracks, 'tracks')
+            if query.did_you_mean:
+                self.printArray(query.did_you_mean, 'did u mean')
+        elif command == 'n':
             self.playNextSong()
-        elif vsucheingabe == 'ls':
+        elif command == 'ls':
             self.printArray(self.track_queue[self.qpos_current:], "datt steht an")
-        elif vsucheingabe == "latin":
-            vsuche = self.suche("roots of chicha", trackCount = 100)
-            self.replacePlaylistWithSearch(vsuche)
+        elif command == "latin":
+            query = self.suche("roots of chicha", trackCount = 100)
+            self.replacePlaylistWithSearch(query)
             self.randomizePlaylist()
             self.playSong()
             print("pack die chicha aus, mausebacke")
-        elif 'https' in vsucheingabe:
+        elif 'https' in command:
         	print("oha...neuste technik am start alter")
-        	spID = vsucheingabe[-22:]
+        	spID = command[-22:]
         	#print(spID)
         	track = self.session.get_track('spotify:track:%s'%spID).load()
         	#print track.name
         	self.add2Playlist(track)
         	#self.playSong()
         elif endMarker == '?':
-            vsuche = self.suche(str(suchString))
-            self.addSearch2Playlist(vsuche)
+            query = self.suche(str(suchString))
+            self.addSearch2Playlist(query)
             self.randomizePlaylist()
             # self.playSong()
         elif endMarker == '!':
-            vsuche = self.suche(str(suchString),trackCount=1)
-            if(vsuche.tracks):
-                self.track_queue = [t for t in vsuche.tracks]
+            query = self.suche(str(suchString),trackCount=1)
+            if(query.tracks):
+                self.track_queue = [t for t in query.tracks]
                 self.qpos_current = 0
-                valbumbrowser = vsuche.tracks[0].album.browse()
-                valbumbrowser.load()
+                album_browse = query.tracks[0].album.browse()
+                album_browse.load()
                 self.addSearch2Playlist(valbumbrowser)
                 self.playSong()
         elif endMarker == '+':
-            vsuche = self.suche(str(suchString))
-            self.add2Playlist(vsuche.tracks[0])
+            query = self.suche(str(suchString))
+            self.add2Playlist(query.tracks[0])
         elif endMarker == '@':
-            vsuche = self.suche(str(suchString))
-            self.addSearch2Playlist(vsuche)
-        elif vsucheingabe == 'random':
+            query = self.suche(str(suchString))
+            self.addSearch2Playlist(query)
+        elif command == 'random':
             self.randomizePlaylist()
         else:
-            vsuche = self.suche(str(vsucheingabe), trackCount = 1)
-            if self.addSearch2Playlist(vsuche):
+            query = self.suche(str(command), trackCount = 1)
+            if self.addSearch2Playlist(query):
                 if(self.session.player.state.encode("utf8") in "unloaded" or self.session.player.state.encode("utf8") in "paused"):
                     self.playSong()
                 else:
@@ -424,10 +424,10 @@ class spotifyRPI(object):
             else:
                 print("\nhabe nix gefunden, aber \nlegastenie kann behandelt werden, dj")
 
-        if vsucheingabe == 'stop':
+        if command == 'stop':
             self.session.player.pause()
 
-        if vsucheingabe == 'checki':
+        if command == 'checki':
             print spotify.AudioBufferStats.stutter
             print spotify.AudioBufferStats.samples
 
@@ -462,7 +462,7 @@ class spotifyRPI(object):
 
     def startThreads(self):
         thread.start_new_thread(self.askTelegram, ())
-        thread.start_new_thread(self.eingabe, ())
+        thread.start_new_thread(self.user_input, ())
         time.sleep(10)
 
 
@@ -480,7 +480,7 @@ def main_loop(player):
         while sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
             keypress = sys.stdin.read(1)
             if keypress=='\n':
-                player.eingabe()
+                player.user_input()
             elif keypress != '':
                 continue
             else: # an empty line means stdin has been closed
@@ -489,14 +489,14 @@ def main_loop(player):
         else:
             try:
                 command = player.callback_queue.get_nowait()
-                player.searchy(command)
+                player.command_handler(command)
             except Queue.Empty:
                 continue
 
 if __name__ == '__main__':
     player = spotifyRPI()
     telegram = Telegram(
-        callback=player.searchy,
+        callback=player.command_handler,
         callback_queue=player.callback_queue,
         )
     telegram_cli = telegram.start_cli()
