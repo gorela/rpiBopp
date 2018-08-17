@@ -33,8 +33,8 @@ do a proper clean-up when receiving SIGINT
 
 USER = sys.argv[1]
 PASSWORD = sys.argv[2]
-PATH_TO_TELEGRAM_CLI = '/usr/bin/telegram-cli'
-PATH_TO_TELEGRAM_PUBKEY = '/etc/telegram-cli/server.pub'
+PATH_TO_TELEGRAM_CLI = '/home/pi/tg/bin/telegram-cli'
+PATH_TO_TELEGRAM_PUBKEY = '/home/pi/tg/server.pub'
 
 INIT = 0x00
 NOSONGS = 0x01
@@ -61,13 +61,13 @@ class Telegram(object):
                              stdout=subprocess.PIPE,
                              bufsize=0,
                              shell=True) # FIXME: without shell=True due to security issues
-        # # stdout output:
-        # while process.poll() is None:
-        #     l = process.stdout.readline() # This blocks until it receives a newline.
-        #     print l
-        # # When the subprocess terminates there might be unconsumed output
-        # # that still needs to be processed.
-        # print process.stdout.read()
+        # stdout output:
+        while process.poll() is None:
+            l = process.stdout.readline() # This blocks until it receives a newline.
+            print l
+        # When the subprocess terminates there might be unconsumed output
+        # that still needs to be processed.
+        print process.stdout.read()
 
         self.cli = process
         return process
@@ -502,7 +502,7 @@ if __name__ == '__main__':
     telegram_cli = telegram.start_cli()
     # TODO: block until TG-CLI is started and active
     time.sleep(5)
-    telegram.start()
+    #telegram.start()
 
     if(int(player.session.connection.state) == 1):
         os.system("clear")
